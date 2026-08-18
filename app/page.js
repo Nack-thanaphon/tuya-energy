@@ -141,13 +141,9 @@ export default function Home() {
             )}
             {!loading && vsAvg != null && (
               <div className="vsWrap">
-                <div className="vsBar">
-                  <div className="vsAvgMark" />
-                  <div className="vsFill" style={{ width: Math.min(100, vsAvg) + '%' }} />
-                </div>
                 <div className="vsText">
                   {vsAvg <= 100
-                    ? `ต่ำกว่าค่าเฉลี่ยบ้านไทย (~${fmt(REF_KWH_DAY, 1)} หน่วย/วัน) ${100 - vsAvg}% 🌱`
+                    ? `ต่ำกว่าค่าเฉลี่ยบ้านไทย (~${fmt(REF_KWH_DAY, 1)} หน่วย/วัน) ${100 - vsAvg}%`
                     : `สูงกว่าค่าเฉลี่ยบ้านไทย ${vsAvg - 100}% ⚡`}
                 </div>
               </div>
@@ -169,6 +165,24 @@ export default function Home() {
             )}
           </section>
         )}
+
+        {/* chart — toggle เดือน/วัน */}
+        <section className="card">
+          <div className="cardHead">
+            <h3 style={{ marginBottom: 0 }}>
+              {range === 'day' ? 'ใช้ไฟตามชั่วโมงวันนี้' : 'ใช้ไฟรายวัน (เดือนนี้)'}
+            </h3>
+            <div className="seg">
+              <button className={range === 'month' ? 'on' : ''} onClick={() => setRange('month')}>เดือน</button>
+              <button className={range === 'day' ? 'on' : ''} onClick={() => setRange('day')}>วัน</button>
+            </div>
+          </div>
+          {loading
+            ? <SkeletonChart />
+            : range === 'day'
+              ? <HourChart hours={m.hours} />
+              : <MonthChart days={m.days} />}
+        </section>
 
         {/* live strip */}
         <section className="strip">
@@ -207,24 +221,6 @@ export default function Home() {
               </div>
             </>
           ) : <div className="empty">กำลังรอข้อมูล…</div>}
-        </section>
-
-        {/* chart — toggle เดือน/วัน */}
-        <section className="card">
-          <div className="cardHead">
-            <h3 style={{ marginBottom: 0 }}>
-              {range === 'day' ? 'ใช้ไฟตามชั่วโมงวันนี้' : 'ใช้ไฟรายวัน (เดือนนี้)'}
-            </h3>
-            <div className="seg">
-              <button className={range === 'month' ? 'on' : ''} onClick={() => setRange('month')}>เดือน</button>
-              <button className={range === 'day' ? 'on' : ''} onClick={() => setRange('day')}>วัน</button>
-            </div>
-          </div>
-          {loading
-            ? <SkeletonChart />
-            : range === 'day'
-              ? <HourChart hours={m.hours} />
-              : <MonthChart days={m.days} />}
         </section>
 
         {/* settings */}

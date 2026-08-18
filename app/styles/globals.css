@@ -14,6 +14,8 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html { color-scheme: light dark; }
+
 body {
   font-family: 'DB Heavent', -apple-system, 'Sarabun', sans-serif;
   font-size: 18px;
@@ -63,7 +65,7 @@ body {
 .bigNum .unit { font-size: 22px; font-weight: 600; color: var(--muted); margin-left: 10px; letter-spacing: 0; }
 .heroSub { color: var(--muted); font-size: 19px; margin-top: 10px; }
 
-.vsWrap { margin-top: 22px; }
+.vsWrap { margin-top: 4px; }
 .vsBar {
   height: 10px; background: var(--line); border-radius: 999px;
   position: relative; overflow: visible;
@@ -214,12 +216,15 @@ body {
   :root {
     --bg: #101112;
     --card: #1a1b1d;
-    --warn-bg: #2d2415;
+    --ink: #f2f2f0;
     --muted: #a8abaf;
-    --faint: #6f7278;
+    --faint: #8a8e94;
     --line: #2a2c2f;
     --accent: #f2f2f0;
     --accent-ink: #17181a;
+    --good: #81c784;
     --warn-bg: #2d2415;
   }
+
+  .setRow input { color: var(--ink); }
 }
