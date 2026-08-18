@@ -121,7 +121,7 @@ export default function Home() {
           </div>
           <div className="heroSub">
             {todayBaht != null ? `≈ ${fmt(todayBaht)} บาท` : 'กำลังรอข้อมูลจากมิเตอร์…'}
-            {bahtPerHour != null && ` · ตอนนี้ ${fmt(bahtPerHour, 0)} ฿/ชม`}
+            {bahtPerHour != null && ` · กำลังใช้ ${fmt(bahtPerHour, 2)} ฿/ชม`}
           </div>
           {vsAvg != null && (
             <div className="vsWrap">
@@ -143,7 +143,7 @@ export default function Home() {
           <div><b>{fmt(m.power, 0)}</b><span>วัตต์</span></div>
           <div><b>{fmt(m.volt, 1)}</b><span>โวลต์</span></div>
           <div><b>{fmt(m.amp, 2)}</b><span>แอมแปร์</span></div>
-          <div><b>{bahtPerHour != null ? fmt(bahtPerHour, 0) : '—'}</b><span>บาท/ชม</span></div>
+          <div><b>{bahtPerHour != null ? fmt(bahtPerHour, 2) : '—'}</b><span>บาท/ชม</span></div>
         </section>
 
         {err && <div className="warn">⚠ ติดต่อเซิร์ฟเวอร์ไม่ได้: {err}</div>}
