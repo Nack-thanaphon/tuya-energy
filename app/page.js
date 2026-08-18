@@ -117,7 +117,7 @@ export default function Home() {
           <div className="heroLabel">วันนี้ใช้ไป</div>
           <div className="bigNum">
             {m.todayKwh != null ? fmt(m.todayKwh) : '—'}
-            <span className="unit">หน่วย</span>
+            <span className="unit">หน่วย (kWh)</span>
           </div>
           <div className="heroSub">
             {todayBaht != null ? `≈ ${fmt(todayBaht)} บาท` : 'กำลังรอข้อมูลจากมิเตอร์…'}
