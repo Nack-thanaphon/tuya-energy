@@ -100,8 +100,8 @@ export default function Home() {
   const mg = projKwh != null ? marginalRate(projKwh) : TIERS[0].rate;
   const todayBaht = m.todayKwh != null
     ? m.todayKwh * (mg + ft) * 1.07 : null;
-  // burn rate now (฿/hour)
-  const bahtPerHour = m.power != null ? m.power * (mg + ft) * 1.07 : null;
+  // burn rate now (฿/hour) — W→kW conversion
+  const bahtPerHour = m.power != null ? m.power / 1000 * (mg + ft) * 1.07 : null;
   const vsAvg = m.todayKwh != null ? Math.min(200, Math.round(m.todayKwh / REF_KWH_DAY * 100)) : null;
 
   return (
