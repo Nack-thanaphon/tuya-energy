@@ -40,7 +40,7 @@ function marginalRate(kwh) {
 }
 
 function interpret(status, logs = []) {
-  const m = { hours: {} };
+  const m = { hours: {}, days: {} };
   for (const s of status) {
     const v = parseFloat(s.value);
     if (isNaN(v)) continue;
@@ -58,7 +58,11 @@ function interpret(status, logs = []) {
   for (let i = 1; i < pows.length; i++) {
     const a = pows[i - 1], b = pows[i];
     const wh = Math.max(0, (a.w + b.w) / 2 * (b.t - a.t) / 3.6e6);
-    m.hours[new Date(b.t).getHours()] = (m.hours[new Date(b.t).getHours()] || 0) + wh;
+    const d = new Date(b.t);
+    const hKey = d.getHours();
+    const dKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    m.hours[hKey] = (m.hours[hKey] || 0) + wh;
+    m.days[dKey] = (m.days[dKey] || 0) + wh;
   }
   // today = add_ele (daily-reset register) — matches Tuya app behaviour
   m.todayKwh = m.addEleKwh ?? null;
@@ -71,6 +75,7 @@ export default function Home() {
   const [ft, setFt] = useState(0.1623);
   const [service, setService] = useState(24.62);
   const [flash, setFlash] = useState('');
+  const [range, setRange] = useState('month'); // 'month' (default) | 'day'
 
   useEffect(() => {
     setFt(parseFloat(localStorage.getItem('ft') ?? '0.1623'));
@@ -90,6 +95,7 @@ export default function Home() {
 
   const dev = data?.device || {};
   const m = interpret(data?.status || [], data?.logs || []);
+  const loading = !data && !err; // first load, no data yet
 
   // projection: today's usage × days in this month
   const now = new Date();
@@ -104,6 +110,11 @@ export default function Home() {
   const bahtPerHour = m.power != null ? m.power / 1000 * (mg + ft) * 1.07 : null;
   const vsAvg = m.todayKwh != null ? Math.min(200, Math.round(m.todayKwh / REF_KWH_DAY * 100)) : null;
 
+  // month view: days with data sorted
+  const dayKeys = Object.keys(m.days).sort();
+  const monthKwh = dayKeys.reduce((s, k) => s + m.days[k], 0) / 1000; // Wh → kWh
+  const monthBill = monthKwh > 0 ? billCalc(monthKwh, ft, service) : null;
+
   return (
     <div className="shell">
       <header className="top">
@@ -112,38 +123,65 @@ export default function Home() {
       </header>
 
       <main className="content">
-        {/* hero — today */}
-        <section className="hero">
-          <div className="heroLabel">วันนี้ใช้ไป</div>
-          <div className="bigNum">
-            {m.todayKwh != null ? fmt(m.todayKwh) : '—'}
-            <span className="unit">หน่วย (kWh)</span>
-          </div>
-          <div className="heroSub">
-            {todayBaht != null ? `≈ ${fmt(todayBaht)} บาท` : 'กำลังรอข้อมูลจากมิเตอร์…'}
-            {bahtPerHour != null && ` · กำลังใช้ ${fmt(bahtPerHour, 2)} ฿/ชม`}
-          </div>
-          {vsAvg != null && (
-            <div className="vsWrap">
-              <div className="vsBar">
-                <div className="vsAvgMark" />
-                <div className="vsFill" style={{ width: Math.min(100, vsAvg) + '%' }} />
+        {/* hero — today / month depending on range */}
+        {range === 'day' ? (
+          <section className="hero">
+            <div className="heroLabel">วันนี้ใช้ไป</div>
+            {loading ? <SkeletonHero /> : (
+              <>
+                <div className="bigNum">
+                  {m.todayKwh != null ? fmt(m.todayKwh) : '—'}
+                  <span className="unit">หน่วย (kWh)</span>
+                </div>
+                <div className="heroSub">
+                  {todayBaht != null ? `≈ ${fmt(todayBaht)} บาท` : 'กำลังรอข้อมูลจากมิเตอร์…'}
+                  {bahtPerHour != null && ` · กำลังใช้ ${fmt(bahtPerHour, 2)} ฿/ชม`}
+                </div>
+              </>
+            )}
+            {!loading && vsAvg != null && (
+              <div className="vsWrap">
+                <div className="vsBar">
+                  <div className="vsAvgMark" />
+                  <div className="vsFill" style={{ width: Math.min(100, vsAvg) + '%' }} />
+                </div>
+                <div className="vsText">
+                  {vsAvg <= 100
+                    ? `ต่ำกว่าค่าเฉลี่ยบ้านไทย (~${fmt(REF_KWH_DAY, 1)} หน่วย/วัน) ${100 - vsAvg}% 🌱`
+                    : `สูงกว่าค่าเฉลี่ยบ้านไทย ${vsAvg - 100}% ⚡`}
+                </div>
               </div>
-              <div className="vsText">
-                {vsAvg <= 100
-                  ? `ต่ำกว่าค่าเฉลี่ยบ้านไทย (~${fmt(REF_KWH_DAY, 1)} หน่วย/วัน) ${100 - vsAvg}% 🌱`
-                  : `สูงกว่าค่าเฉลี่ยบ้านไทย ${vsAvg - 100}% ⚡`}
-              </div>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        ) : (
+          <section className="hero">
+            <div className="heroLabel">เดือนนี้ (สะสมจากข้อมูลที่มี)</div>
+            {loading ? <SkeletonHero /> : (
+              <>
+                <div className="bigNum">
+                  {fmt(monthKwh)}
+                  <span className="unit">หน่วย (kWh)</span>
+                </div>
+                <div className="heroSub">
+                  {monthBill != null ? `≈ ${fmt(monthBill.total)} บาท` : 'ยังไม่มีข้อมูลสะสม'}
+                </div>
+              </>
+            )}
+          </section>
+        )}
 
         {/* live strip */}
         <section className="strip">
-          <div><b>{fmt(m.power, 0)}</b><span>วัตต์</span></div>
-          <div><b>{fmt(m.volt, 1)}</b><span>โวลต์</span></div>
-          <div><b>{fmt(m.amp, 2)}</b><span>แอมแปร์</span></div>
-          <div><b>{bahtPerHour != null ? fmt(bahtPerHour, 2) : '—'}</b><span>บาท/ชม</span></div>
+          {loading ? [0, 1, 2, 3].map(i => (
+            <div key={i}><span className="sk skLine" style={{ width: '70%', display: 'block', margin: '0 auto' }} /></div>
+          )) : (
+            <>
+              <div><b>{fmt(m.power, 0)}</b><span>วัตต์</span></div>
+              <div><b>{fmt(m.volt, 1)}</b><span>โวลต์</span></div>
+              <div><b>{fmt(m.amp, 2)}</b><span>แอมแปร์</span></div>
+              <div><b>{bahtPerHour != null ? fmt(bahtPerHour, 2) : '—'}</b><span>บาท/ชม</span></div>
+            </>
+          )}
         </section>
 
         {err && <div className="warn">⚠ ติดต่อเซิร์ฟเวอร์ไม่ได้: {err}</div>}
@@ -151,8 +189,10 @@ export default function Home() {
 
         {/* projected bill — MEA formula */}
         <section className="card">
-          <h3>ประมาณการบิลเดือนนี้ (ถ้าใช้เท่าวันนี้ทุกวัน)</h3>
-          {projBill != null ? (
+          <div className="cardHead">
+            <h3 style={{ marginBottom: 0 }}>ประมาณการบิลเดือนนี้ (ถ้าใช้เท่าวันนี้ทุกวัน)</h3>
+          </div>
+          {loading ? <SkeletonBill /> : projBill != null ? (
             <>
               <div className="projRow">
                 <span>ใช้ {fmt(projKwh, 0)} หน่วย/{daysInMonth} วัน</span>
@@ -169,10 +209,22 @@ export default function Home() {
           ) : <div className="empty">กำลังรอข้อมูล…</div>}
         </section>
 
-        {/* hourly */}
+        {/* chart — toggle เดือน/วัน */}
         <section className="card">
-          <h3>ใช้ไฟตามชั่วโมงวันนี้</h3>
-          <HourChart hours={m.hours} />
+          <div className="cardHead">
+            <h3 style={{ marginBottom: 0 }}>
+              {range === 'day' ? 'ใช้ไฟตามชั่วโมงวันนี้' : 'ใช้ไฟรายวัน (เดือนนี้)'}
+            </h3>
+            <div className="seg">
+              <button className={range === 'month' ? 'on' : ''} onClick={() => setRange('month')}>เดือน</button>
+              <button className={range === 'day' ? 'on' : ''} onClick={() => setRange('day')}>วัน</button>
+            </div>
+          </div>
+          {loading
+            ? <SkeletonChart />
+            : range === 'day'
+              ? <HourChart hours={m.hours} />
+              : <MonthChart days={m.days} />}
         </section>
 
         {/* settings */}
@@ -198,9 +250,37 @@ export default function Home() {
           [2] สูตรค่าไฟ MEA ประเภท 1.2 ขั้นบันได 3.2484/4.2218/4.4217 + Ft + ค่าบริการ + VAT 7% — <b>พิสูจน์กับบิลจริง 129 หน่วย = 497.12฿ ตรงเป๊ะ</b> (MEA Open Data: opendata.mea.or.th) ·
           [3] "วันนี้" ใช้รีจิสเตอร์ add_ele ของมิเตอร์ (รีเซ็ตรายวัน) · "สะสมรวม" ตั้งแต่ติดตั้งดูได้ใน Tuya app ·
           [4] ค่าเฉลี่ยบ้านไทย ~7.1 หน่วย/วัน จาก World Bank <code>EG.USE.ELEC.KH.PC</code> 2,673 kWh/คน/ปี × 3.2 คน <b>[3][4] เป็นค่าประมาณ</b> ·
-          [5] กราฟรายชั่วโมง คำนวณจากตัวอย่างกำลังไฟจริง {m.sampleCount || 0} จุด (trapezoid)
+          [5] กราฟรายชั่วโมง/รายวัน คำนวณจากตัวอย่างกำลังไฟจริง {m.sampleCount || 0} จุด (trapezoid) — logs คลาวด์เก็บได้ ~1,000 จุดล่าสุด
         </footer>
       </main>
+    </div>
+  );
+}
+
+/* ---------- skeletons ---------- */
+function SkeletonHero() {
+  return (
+    <>
+      <div className="sk skBig" />
+      <div className="sk skLine" />
+    </>
+  );
+}
+function SkeletonBill() {
+  return (
+    <div className="breakdown">
+      {[0, 1, 2, 3].map(i => <div key={i}><span>&nbsp;</span><span className="sk" style={{ width: 90, height: 18 }} /></div>)}
+    </div>
+  );
+}
+function SkeletonChart() {
+  return (
+    <div className="bars">
+      {Array.from({ length: 12 }, (_, i) => (
+        <div key={i} className="barCol">
+          <div className="sk skBar" style={{ height: 30 + (i % 5) * 15 + '%' }} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -221,3 +301,28 @@ function HourChart({ hours }) {
     </div>
   );
 }
+
+function MonthChart({ days }) {
+  const now = new Date();
+  const y = now.getFullYear(), mo = now.getMonth();
+  const daysInMonth = new Date(y, mo + 1, 0).getDate();
+  const data = Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(y, mo, i + 1);
+    const key = `${y}-${String(mo + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
+    return { d: i + 1, wh: days[key] || 0, isToday: key === todayKey(now) };
+  });
+  const max = Math.max(...data.map(d => d.wh), 1);
+  if (!data.some(d => d.wh > 0)) return <div className="empty">ยังไม่มีข้อมูลเดือนนี้</div>;
+  return (
+    <div className="monthGrid">
+      {data.map(d => (
+        <div key={d.d} className="monthCol" title={`${d.d} ${TH_MONTHS[mo]} — ${fmt(d.wh / 1000, 3)} หน่วย`}>
+          <div className="bar" style={{ height: `${Math.max(2, d.wh / max * 100)}%`, opacity: d.isToday ? 1 : .55 }} />
+          <span className="monthLabel">{d.d % 5 === 0 || d.d === 1 ? d.d : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const todayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

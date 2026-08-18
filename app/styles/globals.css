@@ -1,3 +1,4 @@
+@import './font.css';
 :root {
   --bg: #fafaf7;
   --card: #ffffff;
@@ -12,13 +13,6 @@
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
-@font-face {
-  font-family: 'DB Heavent';
-  src: url(data:font/woff2;base64,FIXME_REPLACE_WITH_BASE64);
-  font-weight: normal;
-  font-style: normal;
-}
 
 body {
   font-family: 'DB Heavent', -apple-system, 'Sarabun', sans-serif;
@@ -87,7 +81,7 @@ body {
 /* ---------- live strip ---------- */
 .strip {
   display: grid; grid-template-columns: repeat(4, 1fr);
-  border: 1px solid var์ (line); border-radius: 20px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 20px; overflow: hidden;
   background: var(--card);
 }
 .strip > div {
@@ -104,6 +98,7 @@ body {
   border-radius: 20px; padding: 20px 22px 18px;
 }
 .card h3 { font-size: 17px; font-weight: 700; color: var(--muted); margin-bottom: 16px; }
+.cardHead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 
 /* bill projection */
 .projRow {
@@ -119,6 +114,19 @@ body {
 }
 .breakdown .mgRow { border-bottom: none; color: var(--ink); font-weight: 600; }
 
+/* ---------- range toggle (เดือน/วัน) ---------- */
+.seg {
+  display: inline-flex; border: 1.5px solid var(--line); border-radius: 999px;
+  padding: 3px; background: var(--card); gap: 2px;
+}
+.seg button {
+  font: inherit; font-size: 15px; font-weight: 600; border: none; cursor: pointer;
+  border-radius: 999px; padding: 6px 18px;
+  background: transparent; color: var(--muted);
+  transition: background .15s, color .15s;
+}
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+
 /* hourly bars */
 .bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; }
 .barCol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
@@ -128,12 +136,36 @@ body {
 }
 .barLabel { font-size: 11px; color: var(--faint); margin-top: 6px; height: 14px; }
 
-/* day columns */
-.dayRow { display: flex; justify-content: space-between; gap: 8px; align-items: flex-end; min-height: 120px; padding-top: 4px; }
-.dayCol { flex: 1; display: flex; flex-direction: column; align-items: kWh center; justify-content: flex-end; flex: 1; height: 100%; }
-.dayVal { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
-.dayBar { width: 100%; max-width: 34px; background: var(--accent); border-radius: 6px 6px 3px 3px; opacity: .85; }
-.dayLabel { font-size: 11.5px; color: var(--faint); margin-top: 6px; }
+/* month view: daily bars */
+.monthGrid { display: flex; align-items: flex-end; gap: 2px; height: 140px; }
+.monthCol {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; height: 100%; min-width: 0;
+}
+.monthCol .bar { width: 100%; }
+.monthVal { font-size: 10.5px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; }
+.monthLabel { font-size: 10px; color: var(--faint); margin-top: 6px; }
+.monthTotal {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 18px; margin-bottom: 12px;
+}
+.monthTotal b { font-size: 26px; font-weight: 800; }
+
+/* ---------- skeleton ---------- */
+.sk { position: relative; overflow: hidden; border-radius: 10px; background: var(--line); }
+.sk::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.45), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+@media (prefers-color-scheme: dark) {
+  .sk::after { background: linear-gradient(90deg, transparent, rgba(255,255,255,.07), transparent); }
+}
+.skBig { height: 84px; width: 240px; margin-bottom: 8px; }
+.skLine { height: 20px; width: 60%; }
+.skBar { height: 100%; width: 100%; border-radius: 4px; }
 
 /* settings */
 .settings summary {
@@ -175,13 +207,14 @@ body {
 @media (max-width: 480px) {
   .bigNum { font-size: 64px; }
   .strip b { font-size: 20px; }
+  .seg button { padding: 6px 14px; font-size: 14px; }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #101112;
     --card: #1a1b1d;
-    --ink: #f2f2f0;
+    --warn-bg: #2d2415;
     --muted: #a8abaf;
     --faint: #6f7278;
     --line: #2a2c2f;
