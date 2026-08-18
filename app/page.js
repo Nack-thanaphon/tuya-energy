@@ -74,6 +74,9 @@ export default function Home() {
           </div>
         </div>
         <div className="right">
+          {data?.signal != null && (
+            <span className="status">📶 {data.signal} dBm</span>
+          )}
           <span className={dev.online ? 'status on' : 'status'}>
             <i className={dev.online ? 'dot on' : 'dot'} />{dev.online ? 'เชื่อมต่อแล้ว' : 'ออฟไลน์'}
           </span>

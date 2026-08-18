@@ -70,7 +70,7 @@ export async function GET() {
   try {
     let row = null, logs = [];
     for (let i = 0; i < 10; i++) {
-      const ep = `/v1.0/devices/${DEVICE_ID}/logs?start_time=${now - 7 * DAY_MS}&end_time=${now}&type=7&size=100`
+      const ep = `/v1.0/devices/${DEVICE_ID}/logs?start_time=${now - 7 * DAY_MS}&end_time=${now}&type=7&size=100&query_type=1`
         + (row ? `&start_row_key=${row}` : '');
       const r = await apiGet(ep);
       const res = r.result || {};
@@ -82,9 +82,16 @@ export async function GET() {
   } catch (e) { out.errors.push('logs: ' + e.message); }
 
   try {
-    const ev = await apiGet(`/v1.0/devices/${DEVICE_ID}/logs?start_time=${now - 7 * DAY_MS}&end_time=${now}&type=1&size=20`);
+    const ev = await apiGet(`/v1.0/devices/${DEVICE_ID}/logs?start_time=${now - 7 * DAY_MS}&end_time=${now}&type=1&size=20&query_type=1`);
     out.events = (ev.result || {}).logs || [];
   } catch (e) { out.errors.push('events: ' + e.message); }
+
+  try {
+    // type=8 = WiFi signal strength (RSSI dBm)
+    const sig = await apiGet(`/v1.0/devices/${DEVICE_ID}/logs?start_time=${now - 7 * DAY_MS}&end_time=${now}&type=8&size=5&query_type=1`);
+    const sigLogs = (sig.result || {}).logs || [];
+    if (sigLogs.length) out.signal = parseFloat(sigLogs[0].event_value);
+  } catch (e) { /* non-critical */ }
 
   return NextResponse.json(out);
 }
