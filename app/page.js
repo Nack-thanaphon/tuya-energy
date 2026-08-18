@@ -107,7 +107,7 @@ export default function Home() {
   return (
     <div className="shell">
       <header className="top">
-        <div className="who"><span className="dotLive" /> {dev.name || 'มิเตอร์ไฟ'}</div>
+        <div className="who"><span className="dotLive" /></div>
         <button className="refresh" onClick={load}>รีเฟรช</button>
       </header>
 

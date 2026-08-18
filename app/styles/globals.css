@@ -148,7 +148,7 @@ body {
 .setRow input {
   font: inherit; font-size: 18px; width: 140px;
   border: 1.5px solid var(--line); border-radius: 12px; padding: 10px 14px;
-  background: var(--bg);
+  background: transparent;
 }
 .setRow input:focus { outline: none; border-color: var(--accent); }
 .setRow button {
