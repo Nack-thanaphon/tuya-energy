@@ -105,6 +105,20 @@ body {
 }
 .card h3 { font-size: 17px; font-weight: 700; color: var(--muted); margin-bottom: 16px; }
 
+/* bill projection */
+.projRow {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 18px; margin-bottom: 14px;
+}
+.projTotal { font-size: 34px; font-weight: 800; letter-spacing: -0.5px; }
+.breakdown { display: flex; flex-direction: column; gap: 7px; }
+.breakdown > div {
+  display: flex; justify-content: space-between;
+  font-size: 15.5px; color: var(--muted);
+  border-bottom: 1px dashed var(--line); padding-bottom: 7px;
+}
+.breakdown .mgRow { border-bottom: none; color: var(--ink); font-weight: 600; }
+
 /* hourly bars */
 .bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; }
 .barCol { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
