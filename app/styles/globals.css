@@ -135,6 +135,13 @@ body {
 .bar {
   width: 100%; background: var(--accent); border-radius: 4px 4px 2px 2px;
   min-height: 2px; opacity: .9;
+  transform-origin: bottom;
+  animation: barIn .45s cubic-bezier(.22,1,.36,1) both;
+  transition: height .6s cubic-bezier(.22,1,.36,1);
+}
+@keyframes barIn { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .bar { animation: none; transition: none; }
 }
 .barLabel { font-size: 11px; color: var(--faint); margin-top: 6px; height: 14px; }
 
