@@ -1,0 +1,17 @@
+{
+  "name": "มิเตอร์ไฟ — ค่าไฟ THB",
+  "short_name": "มิเตอร์ไฟ",
+  "description": "ดูการใช้ไฟฟ้าจากมิเตอร์ Tuya แบบเรียลไทม์ พร้อมค่าไฟตามสูตร MEA",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fafaf7",
+  "theme_color": "#fafaf7",
+  "lang": "th",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/icon-192-light.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-light.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
