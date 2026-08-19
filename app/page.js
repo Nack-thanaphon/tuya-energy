@@ -326,7 +326,7 @@ function MonthChart({ days }) {
     <div className="monthGrid">
       {data.map(d => (
         <div key={d.d} className="monthCol" title={`${d.d} ${TH_MONTHS[mo]} — ${fmt(d.wh / 1000, 3)} หน่วย`}>
-          <div className="bar" style={{ height: `${Math.max(2, d.wh / max * 100)}%`, opacity: d.isToday ? 1 : .55 }} />
+          <div className="bar" style={{ height: Math.max(3, d.wh / max * 140), opacity: d.isToday ? 1 : .55 }} />
           <span className="monthLabel">{d.d % 5 === 0 || d.d === 1 ? d.d : ''}</span>
         </div>
       ))}

@@ -151,9 +151,24 @@ body {
   flex: 1; display: flex; flex-direction: column; align-items: center;
   justify-content: flex-end; height: 100%; min-width: 0;
 }
-.monthCol .bar { width: 100%; }
+.monthCol .bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 2px 2px 1px 1px;
+  animation: barIn .25s ease-out both;
+  transition: height .35s ease-out;
+}
 .monthVal { font-size: 10.5px; font-weight: 700; margin-bottom: 4px; white-space: nowrap; }
-.monthLabel { font-size: 10px; color: var(--faint); margin-top: 6px; }
+.monthLabel {
+  font-size: 10px;
+  color: var(--faint);
+  margin-top: 6px;
+  height: 14px;
+  line-height: 14px;
+  min-width: 2ch;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .monthTotal {
   display: flex; justify-content: space-between; align-items: baseline;
   font-size: 18px; margin-bottom: 12px;
