@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 /*
  * Tuya PJ-1103 units (calibrated on live meter 2026-08-19):
@@ -95,11 +95,24 @@ export default function Home() {
 
   const dev = data?.device || {};
   const m = interpret(data?.status || [], data?.logs || []);
+  const mRef = useRef({ todayKwh: null });
+  mRef.current = m;
   const loading = !data && !err; // first load, no data yet
 
+  // ---- daily accumulator (browser-only; skip while SSR) ----
+  const todayKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today = new Date();
+  let dailyRaw = {};
+  if (typeof window !== 'undefined') {
+    try { dailyRaw = JSON.parse(localStorage.getItem('tuyaDaily') || '{}'); } catch (_) {}
+    if (mRef.current.todayKwh != null && typeof dailyRaw[todayKey(today)] !== 'number') {
+      dailyRaw[todayKey(today)] = mRef.current.todayKwh;
+      try { localStorage.setItem('tuyaDaily', JSON.stringify(dailyRaw)); } catch (_) {}
+    }
+  }
+
   // projection: today's usage × days in this month
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
   const projKwh = m.todayKwh != null ? m.todayKwh * daysInMonth : null;
   const projBill = projKwh != null ? billCalc(projKwh, ft, service) : null;
   // today's cost at marginal rate (+Ft, ×VAT)
@@ -110,9 +123,9 @@ export default function Home() {
   const bahtPerHour = m.power != null ? m.power / 1000 * (mg + ft) * 1.07 : null;
   const vsAvg = m.todayKwh != null ? Math.min(200, Math.round(m.todayKwh / REF_KWH_DAY * 100)) : null;
 
-  // month view: days with data sorted
-  const dayKeys = Object.keys(m.days).sort();
-  const monthKwh = dayKeys.reduce((s, k) => s + m.days[k], 0) / 1000; // Wh → kWh
+  // month: sum of daily add_ele this month
+  const monthKeys = Object.keys(dailyRaw).filter(k => k.startsWith(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`));
+  const monthKwh = monthKeys.reduce((s, k) => s + dailyRaw[k], 0);
   const monthBill = monthKwh > 0 ? billCalc(monthKwh, ft, service) : null;
 
   return (
