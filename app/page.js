@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { REF_KWH_DAY, TIERS, billCalc, dateKey, interpretEnergy, marginalRate, mergeDailyHistory, sumMonthKwh } from '../lib/energy.js';
 
 /*
  * Tuya PJ-1103 units (calibrated on live meter 2026-08-19):
@@ -14,60 +15,6 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 const fmt = (n, d = 2) => (n == null || isNaN(n)) ? '—' :
   Number(n).toLocaleString('th-TH', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-const REF_KWH_DAY = 7.1;
-const TIERS = [
-  { upTo: 150, rate: 3.2484 },
-  { upTo: 400, rate: 4.2218 },
-  { upTo: Infinity, rate: 4.4217 },
-];
-
-/* MEA 1.2 bill: E(x) piecewise + Ft + service, × VAT 7% */
-function billCalc(kwh, ft, service) {
-  let energy = 0, prev = 0;
-  for (const t of TIERS) {
-    if (kwh > prev) energy += (Math.min(kwh, t.upTo) - prev) * t.rate;
-    prev = t.upTo;
-    if (kwh <= t.upTo) break;
-  }
-  const ftCost = kwh * ft;
-  const base = energy + ftCost + service;
-  const vat = base * 0.07;
-  return { energy, ftCost, service, vat, total: base + vat, marginal: marginalRate(kwh) };
-}
-function marginalRate(kwh) {
-  for (const t of TIERS) if (kwh <= t.upTo) return t.rate;
-  return TIERS[TIERS.length - 1].rate;
-}
-
-function interpret(status, logs = []) {
-  const m = { hours: {}, days: {} };
-  for (const s of status) {
-    const v = parseFloat(s.value);
-    if (isNaN(v)) continue;
-    if (s.code === 'cur_voltage') m.volt = v / 10;
-    else if (s.code === 'cur_current') m.amp = v / 1000;
-    else if (s.code === 'cur_power') m.power = v / 10;
-    else if (s.code === 'add_ele') m.addEleKwh = v / 1000;
-  }
-  // integrated Wh per hour (from power samples) for the hourly chart
-  const pows = logs
-    .filter(l => l.code === 'cur_power' && !isNaN(parseFloat(l.value)))
-    .map(l => ({ t: l.event_time, w: parseFloat(l.value) / 10 }))
-    .sort((a, b) => a.t - b.t);
-  m.sampleCount = pows.length;
-  for (let i = 1; i < pows.length; i++) {
-    const a = pows[i - 1], b = pows[i];
-    const wh = Math.max(0, (a.w + b.w) / 2 * (b.t - a.t) / 3.6e6);
-    const d = new Date(b.t);
-    const hKey = d.getHours();
-    const dKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    m.hours[hKey] = (m.hours[hKey] || 0) + wh;
-    m.days[dKey] = (m.days[dKey] || 0) + wh;
-  }
-  // today = add_ele (daily-reset register) — matches Tuya app behaviour
-  m.todayKwh = m.addEleKwh ?? null;
-  return m;
-}
 
 export default function Home() {
   const [data, setData] = useState(null);
@@ -94,21 +41,20 @@ export default function Home() {
   };
 
   const dev = data?.device || {};
-  const m = interpret(data?.status || [], data?.logs || []);
-  const mRef = useRef({ todayKwh: null });
-  mRef.current = m;
+  const m = interpretEnergy(data?.status || [], data?.logs || []);
   const loading = !data && !err; // first load, no data yet
 
-  // ---- daily accumulator (browser-only; skip while SSR) ----
-  const todayKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // ---- daily accumulator (browser-only; update every refresh + backfill recent days from logs) ----
   const today = new Date();
   let dailyRaw = {};
   if (typeof window !== 'undefined') {
     try { dailyRaw = JSON.parse(localStorage.getItem('tuyaDaily') || '{}'); } catch (_) {}
-    if (mRef.current.todayKwh != null && typeof dailyRaw[todayKey(today)] !== 'number') {
-      dailyRaw[todayKey(today)] = mRef.current.todayKwh;
-      try { localStorage.setItem('tuyaDaily', JSON.stringify(dailyRaw)); } catch (_) {}
-    }
+    dailyRaw = mergeDailyHistory(dailyRaw, {
+      now: today,
+      todayKwh: m.todayKwh,
+      logDaysKwh: m.daysKwh,
+    });
+    try { localStorage.setItem('tuyaDaily', JSON.stringify(dailyRaw)); } catch (_) {}
   }
 
   // projection: today's usage × days in this month
@@ -123,9 +69,9 @@ export default function Home() {
   const bahtPerHour = m.power != null ? m.power / 1000 * (mg + ft) * 1.07 : null;
   const vsAvg = m.todayKwh != null ? Math.min(200, Math.round(m.todayKwh / REF_KWH_DAY * 100)) : null;
 
-  // month: sum of daily add_ele this month
-  const monthKeys = Object.keys(dailyRaw).filter(k => k.startsWith(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`));
-  const monthKwh = monthKeys.reduce((s, k) => s + dailyRaw[k], 0);
+  // month: saved daily snapshots + recent backfill from logs
+  const monthKwh = sumMonthKwh(dailyRaw, today);
+  const monthDays = Object.fromEntries(Object.entries(dailyRaw).map(([day, kwh]) => [day, kwh * 1000]));
   const monthBill = monthKwh > 0 ? billCalc(monthKwh, ft, service) : null;
 
   return (
@@ -194,7 +140,7 @@ export default function Home() {
             ? <SkeletonChart />
             : range === 'day'
               ? <HourChart hours={m.hours} />
-              : <MonthChart days={m.days} />}
+              : <MonthChart days={monthDays} />}
         </section>
 
         {/* live strip */}
