@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { REF_KWH_DAY, TIERS, billCalc, dateKey, interpretEnergy, marginalRate, mergeDailyHistory, sumMonthKwh } from '../lib/energy.js';
+import { REF_KWH_DAY, TIERS, billCalc, interpretEnergy, marginalRate } from '../lib/energy.js';
 
 /*
  * Tuya PJ-1103 units (calibrated on live meter 2026-08-19):
@@ -42,24 +42,19 @@ export default function Home() {
 
   const dev = data?.device || {};
   const m = interpretEnergy(data?.status || [], data?.logs || []);
+  const billing = data?.billing || null;
   const loading = !data && !err; // first load, no data yet
 
-  // ---- daily accumulator (browser-only; update every refresh + backfill recent days from logs) ----
-  const today = new Date();
-  let dailyRaw = {};
-  if (typeof window !== 'undefined') {
-    try { dailyRaw = JSON.parse(localStorage.getItem('tuyaDaily') || '{}'); } catch (_) {}
-    dailyRaw = mergeDailyHistory(dailyRaw, {
-      now: today,
-      todayKwh: m.todayKwh,
-      logDaysKwh: m.daysKwh,
-    });
-    try { localStorage.setItem('tuyaDaily', JSON.stringify(dailyRaw)); } catch (_) {}
-  }
+  const cycleRows = billing?.rows || [];
+  const monthKwh = billing?.total_kwh ?? 0;
+  const monthBill = monthKwh > 0 ? billCalc(monthKwh, ft, service) : null;
+  const monthDays = Object.fromEntries(cycleRows.map(row => [row.day, Number(row.kwh || 0) * 1000]));
+  const exactKwh = billing?.exact_kwh ?? 0;
+  const estimatedKwh = billing?.estimated_kwh ?? 0;
 
-  // projection: today's usage × days in this month
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const projKwh = m.todayKwh != null ? m.todayKwh * daysInMonth : null;
+  // projection: today's usage × days in this billing cycle
+  const cycleDayCount = billing?.cycle_day_count ?? 31;
+  const projKwh = m.todayKwh != null ? m.todayKwh * cycleDayCount : null;
   const projBill = projKwh != null ? billCalc(projKwh, ft, service) : null;
   // today's cost at marginal rate (+Ft, ×VAT)
   const mg = projKwh != null ? marginalRate(projKwh) : TIERS[0].rate;
@@ -69,10 +64,6 @@ export default function Home() {
   const bahtPerHour = m.power != null ? m.power / 1000 * (mg + ft) * 1.07 : null;
   const vsAvg = m.todayKwh != null ? Math.min(200, Math.round(m.todayKwh / REF_KWH_DAY * 100)) : null;
 
-  // month: saved daily snapshots + recent backfill from logs
-  const monthKwh = sumMonthKwh(dailyRaw, today);
-  const monthDays = Object.fromEntries(Object.entries(dailyRaw).map(([day, kwh]) => [day, kwh * 1000]));
-  const monthBill = monthKwh > 0 ? billCalc(monthKwh, ft, service) : null;
 
   return (
     <div className="shell">
@@ -110,7 +101,7 @@ export default function Home() {
           </section>
         ) : (
           <section className="hero">
-            <div className="heroLabel">เดือนนี้ (สะสมจากข้อมูลที่มี)</div>
+            <div className="heroLabel">รอบบิลนี้ {billing?.label ? `(${billing.label})` : ''}</div>
             {loading ? <SkeletonHero /> : (
               <>
                 <div className="bigNum">
@@ -119,6 +110,7 @@ export default function Home() {
                 </div>
                 <div className="heroSub">
                   {monthBill != null ? `≈ ${fmt(monthBill.total)} บาท` : 'ยังไม่มีข้อมูลสะสม'}
+                  {!loading && billing && ` · exact ${fmt(exactKwh)} / estimated ${fmt(estimatedKwh)}`}
                 </div>
               </>
             )}
@@ -129,7 +121,7 @@ export default function Home() {
         <section className="card">
           <div className="cardHead">
             <h3 style={{ marginBottom: 0 }}>
-              {range === 'day' ? 'ใช้ไฟตามชั่วโมงวันนี้' : 'ใช้ไฟรายวัน (เดือนนี้)'}
+              {range === 'day' ? 'ใช้ไฟตามชั่วโมงวันนี้' : 'ใช้ไฟรายวัน (รอบบิลนี้)'}
             </h3>
             <div className="seg">
               <button className={range === 'month' ? 'on' : ''} onClick={() => setRange('month')}>เดือน</button>
@@ -140,7 +132,7 @@ export default function Home() {
             ? <SkeletonChart />
             : range === 'day'
               ? <HourChart hours={m.hours} />
-              : <MonthChart days={monthDays} />}
+              : <CycleChart rows={cycleRows} todayDay={billing?.today_day} />}
         </section>
 
         {/* live strip */}
@@ -163,12 +155,12 @@ export default function Home() {
         {/* projected bill — MEA formula */}
         <section className="card">
           <div className="cardHead">
-            <h3 style={{ marginBottom: 0 }}>ประมาณการบิลเดือนนี้ (ถ้าใช้เท่าวันนี้ทุกวัน)</h3>
+            <h3 style={{ marginBottom: 0 }}>ประมาณการบิลรอบนี้ (ถ้าใช้เท่าวันนี้ทุกวัน)</h3>
           </div>
           {loading ? <SkeletonBill /> : projBill != null ? (
             <>
               <div className="projRow">
-                <span>ใช้ {fmt(projKwh, 0)} หน่วย/{daysInMonth} วัน</span>
+                <span>ใช้ {fmt(projKwh, 0)} หน่วย/{cycleDayCount} วัน</span>
                 <b className="projTotal">{fmt(projBill.total, 0)} บาท</b>
               </div>
               <div className="breakdown">
@@ -230,54 +222,80 @@ function SkeletonBill() {
 }
 function SkeletonChart() {
   return (
-    <div className="bars">
-      {Array.from({ length: 12 }, (_, i) => (
-        <div key={i} className="barCol">
-          <div className="sk skBar" style={{ height: 30 + (i % 5) * 15 + '%' }} />
-        </div>
-      ))}
+    <div className="lineChartWrap">
+      <div className="sk" style={{ height: '100%', width: '100%', borderRadius: 16 }} />
     </div>
   );
 }
 
 /* ---------- charts ---------- */
 function HourChart({ hours }) {
-  const data = Array.from({ length: 24 }, (_, h) => ({ h, wh: hours[h] || 0 }));
-  const max = Math.max(...data.map(d => d.wh), 1);
+  const data = Array.from({ length: 24 }, (_, h) => ({
+    key: `h-${h}`,
+    label: String(h),
+    wh: hours[h] || 0,
+    title: `${String(h).padStart(2, '0')}:00 — ${fmt((hours[h] || 0) / 1000, 3)} หน่วย`,
+    isHighlight: false,
+  }));
   if (!data.some(d => d.wh > 0)) return <div className="empty">ยังไม่มีข้อมูลวันนี้</div>;
-  return (
-    <div className="bars">
-      {data.map(d => (
-        <div key={d.h} className="barCol" title={`${String(d.h).padStart(2, '0')}:00 — ${fmt(d.wh / 1000, 3)} หน่วย`}>
-          <div className="bar" style={{ height: `${Math.max(2, d.wh / max * 100)}%` }} />
-          <span className="barLabel">{d.h % 3 === 0 ? d.h : ''}</span>
-        </div>
-      ))}
-    </div>
-  );
+  return <LineChart data={data} xTickEvery={3} />;
 }
 
-function MonthChart({ days }) {
-  const now = new Date();
-  const y = now.getFullYear(), mo = now.getMonth();
-  const daysInMonth = new Date(y, mo + 1, 0).getDate();
-  const data = Array.from({ length: daysInMonth }, (_, i) => {
-    const d = new Date(y, mo, i + 1);
-    const key = `${y}-${String(mo + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-    return { d: i + 1, wh: days[key] || 0, isToday: key === todayKey(now) };
+function CycleChart({ rows, todayDay }) {
+  const data = (rows || []).map((row, index) => ({
+    key: row.day,
+    label: String(Number(row.day.slice(-2))),
+    wh: Number(row.kwh || 0) * 1000,
+    title: `${row.day} — ${fmt(Number(row.kwh || 0), 3)} หน่วย · ${row.quality}`,
+    isHighlight: row.day === todayDay,
+    quality: row.quality,
+    index,
+  }));
+  if (!data.some(d => d.wh > 0)) return <div className="empty">ยังไม่มีข้อมูลรอบบิลนี้</div>;
+  return <LineChart data={data} xTickEvery={5} showQualityDots />;
+}
+
+function LineChart({ data, xTickEvery = 1, showQualityDots = false }) {
+  const width = 1000;
+  const height = 260;
+  const topPad = 20;
+  const bottomPad = 34;
+  const sidePad = 10;
+  const innerWidth = width - sidePad * 2;
+  const innerHeight = height - topPad - bottomPad;
+  const rawMax = Math.max(...data.map(d => d.wh), 1);
+  const ceiling = rawMax * 1.15;
+  const stepX = data.length > 1 ? innerWidth / (data.length - 1) : innerWidth;
+  const points = data.map((d, i) => {
+    const x = sidePad + stepX * i;
+    const y = topPad + innerHeight - (d.wh / ceiling) * innerHeight;
+    return { ...d, x, y };
   });
-  const max = Math.max(...data.map(d => d.wh), 1);
-  if (!data.some(d => d.wh > 0)) return <div className="empty">ยังไม่มีข้อมูลเดือนนี้</div>;
+  const polyline = points.map(p => `${p.x},${p.y}`).join(' ');
+
   return (
-    <div className="monthGrid">
-      {data.map(d => (
-        <div key={d.d} className="monthCol" title={`${d.d} ${TH_MONTHS[mo]} — ${fmt(d.wh / 1000, 3)} หน่วย`}>
-          <div className="bar" style={{ height: Math.max(3, d.wh / max * 140), opacity: d.isToday ? 1 : .55 }} />
-          <span className="monthLabel">{d.d % 5 === 0 || d.d === 1 ? d.d : ''}</span>
-        </div>
-      ))}
+    <div className="lineChartWrap">
+      <svg className="lineChart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-label="energy trend chart">
+        <line x1={sidePad} y1={topPad + innerHeight} x2={width - sidePad} y2={topPad + innerHeight} className="chartAxis" />
+        <line x1={sidePad} y1={topPad} x2={sidePad} y2={topPad + innerHeight} className="chartAxis chartAxisFaint" />
+        <line x1={sidePad} y1={topPad + innerHeight * 0.5} x2={width - sidePad} y2={topPad + innerHeight * 0.5} className="chartGuide" />
+        <line x1={sidePad} y1={topPad} x2={width - sidePad} y2={topPad} className="chartGuide" />
+        <polyline points={polyline} className="chartLine" />
+        {points.map((p, index) => (
+          <g key={p.key}>
+            <title>{p.title}</title>
+            <circle
+              cx={p.x}
+              cy={p.y}
+              r={p.isHighlight ? 5.5 : 3.5}
+              className={`chartDot${p.isHighlight ? ' isToday' : ''}${showQualityDots && p.quality === 'estimated' ? ' isEstimated' : ''}`}
+            />
+            {(index % xTickEvery === 0 || p.isHighlight || index === data.length - 1) && (
+              <text x={p.x} y={height - 8} textAnchor="middle" className="chartLabel">{p.label}</text>
+            )}
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }
-const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-const todayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
